@@ -57,4 +57,18 @@ mvn spring-boot:run
 
 ## 界面预览
 
-（截图待补充）
+### 仪表盘
+
+![仪表盘](screenshots/dashboard.png)
+
+### 学生管理
+
+![学生管理](screenshots/student.png)
+
+### 排课管理
+
+![排课管理](screenshots/schedule.png)
+
+### 考勤打卡
+
+![考勤打卡](screenshots/attendance.png)
