@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.mumululu.mapper.UserMapper">
+
+    <select id="findByUsername" resultType="SysUser">
+        SELECT id, username, password, real_name, role, phone,
+               status, locked_until, login_fail, create_time, update_time, is_deleted
+        FROM sys_user
+        WHERE username = #{username} AND is_deleted = 0
+    </select>
+
+    <update id="updateLoginFail">
+        UPDATE sys_user
+        SET login_fail = #{loginFail},
+            status = #{status},
+            locked_until = #{lockedUntil}
+        WHERE id = #{id}
+    </update>
+
+</mapper>

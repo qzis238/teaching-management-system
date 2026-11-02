@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.mumululu.mapper.StudentMapper">
+
+    <select id="list" resultType="Student">
+        SELECT s.id, s.student_no, s.name, s.gender, s.class_id, s.phone, s.address,
+               s.create_time, c.class_name
+        FROM student s
+        LEFT JOIN class c ON s.class_id = c.id AND c.is_deleted = 0
+        WHERE s.is_deleted = 0
+        <if test="name != null and name != ''">
+            AND s.name LIKE CONCAT('%', #{name}, '%')
+        </if>
+        <if test="classId != null">
+            AND s.class_id = #{classId}
+        </if>
+        ORDER BY s.id DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="count" resultType="long">
+        SELECT COUNT(*) FROM student s
+        WHERE s.is_deleted = 0
+        <if test="name != null and name != ''">
+            AND s.name LIKE CONCAT('%', #{name}, '%')
+        </if>
+        <if test="classId != null">
+            AND s.class_id = #{classId}
+        </if>
+    </select>
+
+    <select id="findById" resultType="Student">
+        SELECT s.id, s.student_no, s.name, s.gender, s.class_id, s.phone, s.address,
+               s.create_time, c.class_name
+        FROM student s
+        LEFT JOIN class c ON s.class_id = c.id AND c.is_deleted = 0
+        WHERE s.id = #{id} AND s.is_deleted = 0
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO student (student_no, name, gender, class_id, phone, address)
+        VALUES (#{studentNo}, #{name}, #{gender}, #{classId}, #{phone}, #{address})
+    </insert>
+
+    <update id="update">
+        UPDATE student
+        SET student_no = #{studentNo},
+            name = #{name},
+            gender = #{gender},
+            class_id = #{classId},
+            phone = #{phone},
+            address = #{address}
+        WHERE id = #{id} AND is_deleted = 0
+    </update>
+
+    <update id="deleteById">
+        UPDATE student SET is_deleted = 1 WHERE id = #{id} AND is_deleted = 0
+    </update>
+
+    <select id="countByStudentNo" resultType="int">
+        SELECT COUNT(*) FROM student
+        WHERE student_no = #{studentNo} AND is_deleted = 0
+        <if test="excludeId != null">
+            AND id != #{excludeId}
+        </if>
+    </select>
+
+    <select id="countPendingHomework" resultType="long">
+        SELECT COUNT(*) FROM homework_submission hs
+        INNER JOIN homework h ON hs.homework_id = h.id AND h.is_deleted = 0
+        WHERE hs.student_id = #{studentId}
+          AND hs.submit_status IN (1, 2)
+          AND hs.score IS NULL
+          AND hs.is_deleted = 0
+    </select>
+
+</mapper>

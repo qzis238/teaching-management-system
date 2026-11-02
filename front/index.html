@@ -1,0 +1,2070 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>教学数字平台管理系统</title>
+  <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Microsoft YaHei', sans-serif; }
+
+    #app { height: 100vh; }
+
+    .logo {
+      height: 60px; line-height: 60px; text-align: center;
+      font-size: 18px; font-weight: 600; color: #fff;
+      background: #1f2d3d; letter-spacing: 2px; white-space: nowrap; overflow: hidden;
+    }
+    .logo-collapsed {
+      font-size: 14px; letter-spacing: 0;
+    }
+
+    .sidebar {
+      background: #304156; overflow-y: auto; overflow-x: hidden;
+      transition: width 0.3s;
+    }
+    .sidebar .el-menu {
+      border-right: none;
+    }
+
+    .header {
+      display: flex; align-items: center; justify-content: space-between;
+      background: #fff; border-bottom: 1px solid #e4e7ed; padding: 0 20px;
+      height: 60px; box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    }
+    .header-left {
+      display: flex; align-items: center; gap: 12px;
+    }
+    .collapse-btn {
+      font-size: 20px; cursor: pointer; color: #606266; padding: 4px;
+      border-radius: 4px; transition: background 0.2s;
+    }
+    .collapse-btn:hover { background: #f0f2f5; }
+    .header-right {
+      display: flex; align-items: center; gap: 16px; color: #606266;
+    }
+    .user-name { font-size: 14px; }
+
+    .main-content {
+      background: #f0f2f5; padding: 20px; overflow-y: auto;
+    }
+
+    .welcome {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      height: 100%; color: #909399;
+    }
+    .welcome h2 { font-size: 28px; margin-bottom: 12px; color: #303133; }
+    .welcome p { font-size: 16px; }
+
+    /* ---------- 仪表盘 ---------- */
+    .stat-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 20px; }
+    .stat-card { background: #fff; border-radius: 8px; padding: 24px; display: flex; align-items: center; gap: 18px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .stat-icon { width: 56px; height: 56px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 28px; color: #fff; flex-shrink: 0; }
+    .stat-icon.students  { background: linear-gradient(135deg, #4facfe, #00f2fe); }
+    .stat-icon.classes   { background: linear-gradient(135deg, #43e97b, #38f9d7); }
+    .stat-icon.attend    { background: linear-gradient(135deg, #fa709a, #fee140); }
+    .stat-icon.homework  { background: linear-gradient(135deg, #a18cd1, #fbc2eb); }
+    .stat-label { font-size: 14px; color: #909399; margin-bottom: 6px; }
+    .stat-value { font-size: 28px; font-weight: 700; color: #303133; }
+    .stat-unit  { font-size: 14px; color: #909399; margin-left: 2px; }
+
+    .charts-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
+    .chart-box { background: #fff; border-radius: 8px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .chart-title { font-size: 16px; font-weight: 600; color: #303133; margin-bottom: 12px; }
+    .chart-container { width: 100%; height: 320px; }
+
+    @media (max-width: 992px) {
+      .stat-cards { grid-template-columns: repeat(2, 1fr); }
+      .charts-row { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 576px) {
+      .stat-cards { grid-template-columns: 1fr; }
+    }
+
+    /* ---------- 排课表 ---------- */
+    .schedule-table { width:100%; border-collapse:collapse; table-layout:fixed; }
+    .schedule-table th { background:#f5f7fa; color:#606266; font-weight:600; padding:10px 4px; border:1px solid #ebeef5; font-size:14px; }
+    .schedule-table .period-col { width:70px; background:#f5f7fa; color:#909399; font-size:13px; text-align:center; padding:8px 4px; border:1px solid #ebeef5; font-weight:500; }
+    .schedule-cell { height:68px; padding:6px 8px; border:1px solid #ebeef5; text-align:center; vertical-align:middle; cursor:pointer; transition:background 0.2s,box-shadow 0.2s; }
+    .schedule-cell:hover { background:#ecf5ff; box-shadow:inset 0 0 0 1px #b3d8ff; }
+    .schedule-cell.has-course { background:#ecf5ff; }
+    .schedule-cell.has-course:hover { background:#d9ecff; }
+    .cell-course { font-size:14px; font-weight:600; color:#303133; margin-bottom:2px; }
+    .cell-teacher { font-size:12px; color:#909399; }
+    .cell-classroom { font-size:11px; color:#b0b3bb; }
+    .cell-empty { font-size:12px; color:#c0c4cc; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <el-container style="height:100vh;">
+      <!-- 侧边栏 -->
+      <el-aside :width="collapsed ? '64px' : '220px'" class="sidebar">
+        <div class="logo" :class="{ 'logo-collapsed': collapsed }">
+          {{ collapsed ? '平台' : '教学数字平台' }}
+        </div>
+        <el-menu
+          :default-active="currentRoute"
+          :router="true"
+          :collapse="collapsed"
+          background-color="#304156"
+          text-color="#bfcbd9"
+          active-text-color="#409eff"
+        >
+          <el-menu-item index="/dashboard">
+            <el-icon><svg viewBox="0 0 1024 1024" width="18" height="18"><rect x="128" y="512" width="128" height="384" rx="8" fill="currentColor"/><rect x="448" y="320" width="128" height="576" rx="8" fill="currentColor"/><rect x="768" y="192" width="128" height="704" rx="8" fill="currentColor"/></svg></el-icon>
+            <span>仪表盘</span>
+          </el-menu-item>
+          <el-menu-item index="/student">
+            <el-icon><svg viewBox="0 0 1024 1024" width="18" height="18"><circle cx="512" cy="320" r="160" fill="currentColor"/><path d="M160 864c0-176 160-352 352-352s352 176 352 352" stroke="currentColor" stroke-width="60" fill="none"/></svg></el-icon>
+            <span>学生管理</span>
+          </el-menu-item>
+          <el-menu-item index="/class">
+            <el-icon><svg viewBox="0 0 1024 1024" width="18" height="18"><rect x="192" y="320" width="256" height="160" rx="8" fill="currentColor"/><rect x="576" y="320" width="256" height="160" rx="8" fill="currentColor"/><rect x="128" y="576" width="768" height="256" rx="8" fill="currentColor"/></svg></el-icon>
+            <span>班级管理</span>
+          </el-menu-item>
+          <el-menu-item index="/course">
+            <el-icon><svg viewBox="0 0 1024 1024" width="18" height="18"><rect x="192" y="128" width="640" height="128" rx="8" fill="currentColor"/><rect x="192" y="320" width="640" height="128" rx="8" fill="currentColor"/><rect x="192" y="512" width="640" height="128" rx="8" fill="currentColor"/><rect x="192" y="704" width="640" height="128" rx="8" fill="currentColor"/></svg></el-icon>
+            <span>课程管理</span>
+          </el-menu-item>
+          <el-menu-item index="/schedule">
+            <el-icon><svg viewBox="0 0 1024 1024" width="18" height="18"><rect x="192" y="128" width="640" height="768" rx="8" fill="none" stroke="currentColor" stroke-width="40"/><line x1="192" y1="320" x2="832" y2="320" stroke="currentColor" stroke-width="40"/><line x1="448" y1="128" x2="448" y2="896" stroke="currentColor" stroke-width="40"/></svg></el-icon>
+            <span>排课管理</span>
+          </el-menu-item>
+          <el-menu-item index="/attendance">
+            <el-icon><svg viewBox="0 0 1024 1024" width="18" height="18"><circle cx="512" cy="512" r="320" fill="none" stroke="currentColor" stroke-width="60"/><polyline points="512,320 512,512 704,576" stroke="currentColor" stroke-width="50" fill="none" stroke-linecap="round"/></svg></el-icon>
+            <span>考勤打卡</span>
+          </el-menu-item>
+          <el-menu-item index="/score">
+            <el-icon><svg viewBox="0 0 1024 1024" width="18" height="18"><rect x="160" y="320" width="192" height="512" rx="8" fill="currentColor"/><rect x="416" y="512" width="192" height="320" rx="8" fill="currentColor"/><rect x="672" y="160" width="192" height="672" rx="8" fill="currentColor"/></svg></el-icon>
+            <span>成绩管理</span>
+          </el-menu-item>
+          <el-menu-item index="/homework">
+            <el-icon><svg viewBox="0 0 1024 1024" width="18" height="18"><rect x="256" y="160" width="512" height="704" rx="8" fill="none" stroke="currentColor" stroke-width="40"/><line x1="384" y1="352" x2="640" y2="352" stroke="currentColor" stroke-width="30"/><line x1="384" y1="480" x2="640" y2="480" stroke="currentColor" stroke-width="30"/><line x1="384" y1="608" x2="512" y2="608" stroke="currentColor" stroke-width="30"/></svg></el-icon>
+            <span>作业管理</span>
+          </el-menu-item>
+        </el-menu>
+      </el-aside>
+
+      <!-- 右侧主体 -->
+      <el-container>
+        <!-- 顶部栏 -->
+        <el-header class="header" height="60px">
+          <div class="header-left">
+            <span class="collapse-btn" @click="collapsed = !collapsed">
+              <svg v-if="collapsed" viewBox="0 0 24 24" width="24" height="24"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="2" fill="none"/></svg>
+              <svg v-else viewBox="0 0 24 24" width="24" height="24"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="2" fill="none"/></svg>
+            </span>
+            <span style="color:#909399;">教学数字平台管理系统</span>
+          </div>
+          <div class="header-right">
+            <span class="user-name">{{ userInfo.realName }}</span>
+            <el-button type="danger" size="small" plain @click="handleLogout">退出登录</el-button>
+          </div>
+        </el-header>
+
+        <!-- 主内容区 -->
+        <el-main class="main-content">
+          <router-view></router-view>
+        </el-main>
+      </el-container>
+    </el-container>
+  </div>
+
+  <!-- Vue 3 -->
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <!-- Vue Router 4 -->
+  <script src="https://unpkg.com/vue-router@4/dist/vue-router.global.prod.js"></script>
+  <!-- Element Plus -->
+  <script src="https://unpkg.com/element-plus"></script>
+  <!-- ECharts -->
+  <script src="https://unpkg.com/echarts@5/dist/echarts.min.js"></script>
+  <!-- Element Plus 中文语言包 -->
+  <script src="https://unpkg.com/element-plus/dist/locale/zh-cn.min.js"></script>
+
+  <script>
+    const { createApp, ref, computed, reactive } = Vue
+    const { createRouter, createWebHashHistory } = VueRouter
+
+    // ---------- 页面组件（占位，后续任务逐步替换） ----------
+
+    const Dashboard = {
+      template: `
+        <div>
+          <!-- 统计卡片 -->
+          <div class="stat-cards">
+            <div class="stat-card">
+              <div class="stat-icon students">
+                <svg viewBox="0 0 24 24" width="28" height="28"><circle cx="12" cy="8" r="4" fill="currentColor"/><path d="M4 20c0-4 4-8 8-8s8 4 8 8" stroke="currentColor" stroke-width="2" fill="none"/></svg>
+              </div>
+              <div>
+                <div class="stat-label">学生总数</div>
+                <div class="stat-value">{{ stats.studentTotal }}<span class="stat-unit">人</span></div>
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon classes">
+                <svg viewBox="0 0 24 24" width="28" height="28"><rect x="4" y="6" width="7" height="5" rx="1" fill="currentColor"/><rect x="13" y="6" width="7" height="5" rx="1" fill="currentColor"/><rect x="2" y="14" width="20" height="7" rx="1" fill="currentColor"/></svg>
+              </div>
+              <div>
+                <div class="stat-label">班级总数</div>
+                <div class="stat-value">{{ stats.classTotal }}<span class="stat-unit">个</span></div>
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon attend">
+                <svg viewBox="0 0 24 24" width="28" height="28"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><polyline points="8,12 11,15 16,9" stroke="currentColor" stroke-width="2" fill="none"/></svg>
+              </div>
+              <div>
+                <div class="stat-label">今日出勤率</div>
+                <div class="stat-value">{{ stats.todayAttendanceRate }}<span class="stat-unit">%</span></div>
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon homework">
+                <svg viewBox="0 0 24 24" width="28" height="28"><rect x="7" y="3" width="10" height="16" rx="1" fill="none" stroke="currentColor" stroke-width="2"/><line x1="9" y1="8" x2="15" y2="8" stroke="currentColor" stroke-width="1.5"/><line x1="9" y1="11" x2="15" y2="11" stroke="currentColor" stroke-width="1.5"/><line x1="9" y1="14" x2="12" y2="14" stroke="currentColor" stroke-width="1.5"/></svg>
+              </div>
+              <div>
+                <div class="stat-label">待批改作业数</div>
+                <div class="stat-value">{{ stats.pendingHomeworkCount }}<span class="stat-unit">份</span></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 图表行 -->
+          <div class="charts-row">
+            <div class="chart-box">
+              <div class="chart-title">各班级学生人数分布</div>
+              <div ref="barChartRef" class="chart-container"></div>
+            </div>
+            <div class="chart-box">
+              <div class="chart-title">近7天出勤趋势</div>
+              <div ref="lineChartRef" class="chart-container"></div>
+            </div>
+          </div>
+        </div>
+      `,
+      data() {
+        return {
+          loading: true,
+          stats: {
+            studentTotal: 0,
+            classTotal: 0,
+            todayAttendanceRate: 0,
+            pendingHomeworkCount: 0
+          },
+          classDistribution: [],
+          attendanceTrend: []
+        }
+      },
+      mounted() {
+        this.fetchData()
+      },
+      methods: {
+        async fetchData() {
+          const token = localStorage.getItem('token')
+          const headers = { 'token': token }
+          try {
+            const [statsRes, distRes, trendRes] = await Promise.all([
+              fetch(API_BASE + '/api/dashboard/stats', { headers }),
+              fetch(API_BASE + '/api/dashboard/class-student-distribution', { headers }),
+              fetch(API_BASE + '/api/dashboard/attendance-trend', { headers })
+            ])
+            const [statsJson, distJson, trendJson] = await Promise.all([
+              statsRes.json(), distRes.json(), trendRes.json()
+            ])
+            if (statsJson.code === 200) {
+              this.stats = statsJson.data
+            }
+            if (distJson.code === 200) {
+              this.classDistribution = distJson.data
+            }
+            if (trendJson.code === 200) {
+              this.attendanceTrend = trendJson.data
+            }
+          } catch (e) {
+            // 加载失败保持默认空数据
+          }
+          this.loading = false
+          this.$nextTick(() => {
+            this.renderBarChart()
+            this.renderLineChart()
+          })
+        },
+        renderBarChart() {
+          const dom = this.$refs.barChartRef
+          if (!dom) return
+          const chart = echarts.init(dom)
+          const names = this.classDistribution.map(d => d.className)
+          // 缩短班级名称以便显示
+          const shortNames = names.map(n => n.replace('2024级', '').replace('2025级', ''))
+          chart.setOption({
+            tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+            grid: { left: '3%', right: '10%', bottom: '10%', top: '8%', containLabel: true },
+            xAxis: {
+              type: 'category',
+              data: shortNames,
+              axisLabel: { rotate: 30, fontSize: 11 }
+            },
+            yAxis: { type: 'value', name: '人数', minInterval: 1 },
+            series: [{
+              type: 'bar',
+              data: this.classDistribution.map(d => d.studentCount),
+              itemStyle: {
+                borderRadius: [4, 4, 0, 0],
+                color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                  { offset: 0, color: '#4facfe' },
+                  { offset: 1, color: '#409eff' }
+                ])
+              },
+              barMaxWidth: 40
+            }]
+          })
+          window.addEventListener('resize', () => chart.resize())
+        },
+        renderLineChart() {
+          const dom = this.$refs.lineChartRef
+          if (!dom) return
+          const chart = echarts.init(dom)
+          chart.setOption({
+            tooltip: { trigger: 'axis' },
+            grid: { left: '3%', right: '6%', bottom: '8%', top: '8%', containLabel: true },
+            xAxis: {
+              type: 'category',
+              data: this.attendanceTrend.map(d => d.date),
+              axisLabel: { fontSize: 11 }
+            },
+            yAxis: { type: 'value', name: '%', min: 0, max: 100 },
+            series: [{
+              type: 'line',
+              data: this.attendanceTrend.map(d => d.rate),
+              smooth: true,
+              lineStyle: { color: '#4facfe', width: 3 },
+              itemStyle: { color: '#4facfe' },
+              areaStyle: {
+                color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                  { offset: 0, color: 'rgba(79,172,254,0.35)' },
+                  { offset: 1, color: 'rgba(79,172,254,0.05)' }
+                ])
+              },
+              symbol: 'circle',
+              symbolSize: 8
+            }]
+          })
+          window.addEventListener('resize', () => chart.resize())
+        }
+      }
+    }
+
+    const StudentManage = {
+      template: `
+        <div>
+          <!-- 搜索栏 -->
+          <el-card style="margin-bottom:16px;">
+            <el-row :gutter="12">
+              <el-col :span="6">
+                <el-input v-model="search.name" placeholder="输入姓名搜索" clearable @keyup.enter="handleSearch"></el-input>
+              </el-col>
+              <el-col :span="5">
+                <el-select v-model="search.classId" placeholder="选择班级" clearable style="width:100%;">
+                  <el-option v-for="c in classOptions" :key="c.id" :label="c.className" :value="c.id"></el-option>
+                </el-select>
+              </el-col>
+              <el-col :span="4">
+                <el-button type="primary" @click="handleSearch">搜索</el-button>
+                <el-button @click="handleReset">重置</el-button>
+              </el-col>
+              <el-col :span="9" style="text-align:right;">
+                <el-button type="primary" @click="openAdd">新增学生</el-button>
+              </el-col>
+            </el-row>
+          </el-card>
+
+          <!-- 表格 -->
+          <el-card>
+            <el-table :data="studentList" stripe border style="width:100%;" v-loading="loading">
+              <el-table-column prop="studentNo" label="学号" width="110"></el-table-column>
+              <el-table-column prop="name" label="姓名" width="100"></el-table-column>
+              <el-table-column label="性别" width="70">
+                <template v-slot="{row}">{{ row.gender === 1 ? '男' : '女' }}</template>
+              </el-table-column>
+              <el-table-column prop="className" label="班级" min-width="160"></el-table-column>
+              <el-table-column prop="phone" label="手机号" width="130"></el-table-column>
+              <el-table-column prop="address" label="家庭住址" min-width="160" show-overflow-tooltip></el-table-column>
+              <el-table-column label="操作" width="140" fixed="right">
+                <template v-slot="{row}">
+                  <el-button type="primary" size="small" link @click="openEdit(row)">编辑</el-button>
+                  <el-button type="danger" size="small" link @click="handleDelete(row)">删除</el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+            <div style="margin-top:16px;text-align:right;">
+              <el-pagination
+                v-model:current-page="pagination.page"
+                v-model:page-size="pagination.pageSize"
+                :page-sizes="[10,20,50,100]"
+                :total="total"
+                layout="total,sizes,prev,pager,next,jumper"
+                @size-change="handlePageChange"
+                @current-change="handlePageChange"
+              ></el-pagination>
+            </div>
+          </el-card>
+
+          <!-- 新增/编辑弹窗 -->
+          <el-dialog v-model="dialog.visible" :title="dialog.isEdit ? '编辑学生' : '新增学生'" width="520px" @close="resetForm">
+            <el-form ref="formRef" :model="form" :rules="formRules" label-width="80px">
+              <el-form-item label="学号" prop="studentNo">
+                <el-input v-model="form.studentNo" placeholder="请输入学号"></el-input>
+              </el-form-item>
+              <el-form-item label="姓名" prop="name">
+                <el-input v-model="form.name" placeholder="请输入姓名"></el-input>
+              </el-form-item>
+              <el-form-item label="性别" prop="gender">
+                <el-radio-group v-model="form.gender">
+                  <el-radio :value="1">男</el-radio>
+                  <el-radio :value="2">女</el-radio>
+                </el-radio-group>
+              </el-form-item>
+              <el-form-item label="班级" prop="classId">
+                <el-select v-model="form.classId" placeholder="请选择班级" style="width:100%;">
+                  <el-option v-for="c in classOptions" :key="c.id" :label="c.className" :value="c.id"></el-option>
+                </el-select>
+              </el-form-item>
+              <el-form-item label="手机号" prop="phone">
+                <el-input v-model="form.phone" placeholder="请输入手机号"></el-input>
+              </el-form-item>
+              <el-form-item label="家庭住址" prop="address">
+                <el-input v-model="form.address" placeholder="请输入家庭住址"></el-input>
+              </el-form-item>
+            </el-form>
+            <template #footer>
+              <el-button @click="dialog.visible = false">取消</el-button>
+              <el-button type="primary" :loading="dialog.loading" @click="handleSave">保存</el-button>
+            </template>
+          </el-dialog>
+        </div>
+      `,
+      data() {
+        return {
+          loading: false,
+          studentList: [],
+          total: 0,
+          search: { name: '', classId: null },
+          pagination: { page: 1, pageSize: 10 },
+          dialog: { visible: false, isEdit: false, loading: false },
+          form: { id: null, studentNo: '', name: '', gender: 1, classId: null, phone: '', address: '' },
+          formRules: {
+            studentNo: [{ required: true, message: '请输入学号', trigger: 'blur' }],
+            name: [{ required: true, message: '请输入姓名', trigger: 'blur' }],
+            gender: [{ required: true, message: '请选择性别', trigger: 'change' }],
+            classId: [{ required: true, message: '请选择班级', trigger: 'change' }]
+          },
+          classOptions: []
+        }
+      },
+      created() {
+        this.fetchClassOptions()
+        this.fetchStudents()
+      },
+      methods: {
+        async fetchClassOptions() {
+          try {
+            const res = await fetch(API_BASE + '/api/class/options', {
+              headers: { 'token': localStorage.getItem('token') }
+            })
+            const json = await res.json()
+            if (json.code === 200) {
+              this.classOptions = json.data
+            }
+          } catch (e) { /* 加载失败保持空列表 */ }
+        },
+        async fetchStudents() {
+          this.loading = true
+          try {
+            const params = new URLSearchParams()
+            params.append('page', this.pagination.page)
+            params.append('pageSize', this.pagination.pageSize)
+            if (this.search.name) params.append('name', this.search.name)
+            if (this.search.classId) params.append('classId', this.search.classId)
+            const res = await fetch(API_BASE + '/api/student/list?' + params.toString(), {
+              headers: { 'token': localStorage.getItem('token') }
+            })
+            const json = await res.json()
+            if (json.code === 200) {
+              this.studentList = json.data.list
+              this.total = json.data.total
+            }
+          } catch (e) { /* 加载失败保持空列表 */ }
+          this.loading = false
+        },
+        handleSearch() { this.pagination.page = 1; this.fetchStudents() },
+        handleReset() { this.search.name = ''; this.search.classId = null; this.pagination.page = 1; this.fetchStudents() },
+        handlePageChange() { this.fetchStudents() },
+        openAdd() {
+          this.dialog.isEdit = false
+          this.dialog.visible = true
+        },
+        openEdit(row) {
+          this.dialog.isEdit = true
+          this.form = { ...row }
+          this.dialog.visible = true
+        },
+        async handleSave() {
+          const valid = await this.$refs.formRef.validate().catch(() => false)
+          if (!valid) return
+          this.dialog.loading = true
+          try {
+            const body = {
+              studentNo: this.form.studentNo,
+              name: this.form.name,
+              gender: this.form.gender,
+              classId: this.form.classId,
+              phone: this.form.phone || '',
+              address: this.form.address || ''
+            }
+            const url = this.dialog.isEdit
+              ? API_BASE + '/api/student/' + this.form.id
+              : API_BASE + '/api/student'
+            const method = this.dialog.isEdit ? 'PUT' : 'POST'
+            const res = await fetch(url, {
+              method,
+              headers: { 'Content-Type': 'application/json', 'token': localStorage.getItem('token') },
+              body: JSON.stringify(body)
+            })
+            const json = await res.json()
+            if (json.code === 200) {
+              ElementPlus.ElMessage.success(json.message || (this.dialog.isEdit ? '修改成功' : '新增成功'))
+              this.dialog.visible = false
+              this.fetchStudents()
+            } else {
+              ElementPlus.ElMessage.error(json.message || '操作失败')
+            }
+          } catch (e) {
+            ElementPlus.ElMessage.error('网络错误')
+          }
+          this.dialog.loading = false
+        },
+        handleDelete(row) {
+          ElementPlus.ElMessageBox.confirm(`确认删除学生"${row.name}"吗？`, '删除确认', { type: 'warning' })
+            .then(async () => {
+              try {
+                const res = await fetch(API_BASE + '/api/student/' + row.id, {
+                  method: 'DELETE',
+                  headers: { 'token': localStorage.getItem('token') }
+                })
+                const json = await res.json()
+                if (json.code === 200) {
+                  ElementPlus.ElMessage.success('删除成功')
+                  this.fetchStudents()
+                } else {
+                  ElementPlus.ElMessage.error(json.message || '删除失败')
+                }
+              } catch (e) {
+                ElementPlus.ElMessage.error('网络错误')
+              }
+            })
+            .catch(() => {})
+        },
+        resetForm() {
+          this.form = { id: null, studentNo: '', name: '', gender: 1, classId: null, phone: '', address: '' }
+          this.$nextTick(() => { if (this.$refs.formRef) this.$refs.formRef.clearValidate() })
+        }
+      }
+    }
+
+    const ClassManage = {
+      template: `
+        <div>
+          <el-card style="margin-bottom:16px;">
+            <el-row :gutter="12">
+              <el-col :span="6">
+                <el-input v-model="search.className" placeholder="输入班级名称搜索" clearable @keyup.enter="handleSearch"></el-input>
+              </el-col>
+              <el-col :span="4">
+                <el-button type="primary" @click="handleSearch">搜索</el-button>
+                <el-button @click="search.className='';handleSearch()">重置</el-button>
+              </el-col>
+              <el-col :span="14" style="text-align:right;">
+                <el-button type="primary" @click="openAdd">新增班级</el-button>
+              </el-col>
+            </el-row>
+          </el-card>
+
+          <el-card>
+            <el-table :data="classList" stripe border style="width:100%;" v-loading="loading">
+              <el-table-column prop="className" label="班级名称" min-width="180"></el-table-column>
+              <el-table-column prop="teacherName" label="负责老师" width="100"></el-table-column>
+              <el-table-column prop="studentCount" label="学生人数" width="100" align="center"></el-table-column>
+              <el-table-column prop="description" label="班级描述" min-width="200" show-overflow-tooltip></el-table-column>
+              <el-table-column label="操作" width="140" fixed="right">
+                <template v-slot="{row}">
+                  <el-button type="primary" size="small" link @click="openEdit(row)">编辑</el-button>
+                  <el-button type="danger" size="small" link @click="handleDelete(row)">删除</el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+            <div style="margin-top:16px;text-align:right;">
+              <el-pagination
+                v-model:current-page="pagination.page"
+                v-model:page-size="pagination.pageSize"
+                :page-sizes="[10,20,50,100]"
+                :total="total"
+                layout="total,sizes,prev,pager,next,jumper"
+                @size-change="handlePageChange"
+                @current-change="handlePageChange"
+              ></el-pagination>
+            </div>
+          </el-card>
+
+          <el-dialog v-model="dialog.visible" :title="dialog.isEdit ? '编辑班级' : '新增班级'" width="500px" @close="resetForm">
+            <el-form ref="formRef" :model="form" :rules="formRules" label-width="100px">
+              <el-form-item label="班级名称" prop="className">
+                <el-input v-model="form.className" placeholder="如：2024级软件工程1班"></el-input>
+              </el-form-item>
+              <el-form-item label="负责老师" prop="teacherId">
+                <el-select v-model="form.teacherId" placeholder="请选择负责老师" style="width:100%;">
+                  <el-option v-for="t in teacherOptions" :key="t.id" :label="t.realName" :value="t.id"></el-option>
+                </el-select>
+              </el-form-item>
+              <el-form-item label="班级描述" prop="description">
+                <el-input v-model="form.description" type="textarea" :rows="3" placeholder="请输入班级描述"></el-input>
+              </el-form-item>
+            </el-form>
+            <template #footer>
+              <el-button @click="dialog.visible = false">取消</el-button>
+              <el-button type="primary" :loading="dialog.loading" @click="handleSave">保存</el-button>
+            </template>
+          </el-dialog>
+        </div>
+      `,
+      data() {
+        return {
+          loading: false,
+          classList: [],
+          total: 0,
+          search: { className: '' },
+          pagination: { page: 1, pageSize: 10 },
+          dialog: { visible: false, isEdit: false, loading: false },
+          form: { id: null, className: '', teacherId: null, description: '' },
+          formRules: {
+            className: [{ required: true, message: '请输入班级名称', trigger: 'blur' }],
+            teacherId: [{ required: true, message: '请选择负责老师', trigger: 'change' }]
+          },
+          teacherOptions: []
+        }
+      },
+      created() {
+        this.fetchTeacherOptions()
+        this.fetchClasses()
+      },
+      methods: {
+        async fetchTeacherOptions() {
+          try {
+            const res = await fetch(API_BASE + '/api/teacher/list', {
+              headers: { 'token': localStorage.getItem('token') }
+            })
+            const json = await res.json()
+            if (json.code === 200) {
+              this.teacherOptions = json.data
+            }
+          } catch (e) { /* 加载失败保持空列表 */ }
+        },
+        async fetchClasses() {
+          this.loading = true
+          try {
+            const params = new URLSearchParams()
+            params.append('page', this.pagination.page)
+            params.append('pageSize', this.pagination.pageSize)
+            if (this.search.className) params.append('className', this.search.className)
+            const res = await fetch(API_BASE + '/api/class/list?' + params.toString(), {
+              headers: { 'token': localStorage.getItem('token') }
+            })
+            const json = await res.json()
+            if (json.code === 200) {
+              this.classList = json.data.list
+              this.total = json.data.total
+            }
+          } catch (e) { /* 加载失败保持空列表 */ }
+          this.loading = false
+        },
+        handleSearch() { this.pagination.page = 1; this.fetchClasses() },
+        handlePageChange() { this.fetchClasses() },
+        openAdd() { this.dialog.isEdit = false; this.dialog.visible = true },
+        openEdit(row) { this.dialog.isEdit = true; this.form = { ...row }; this.dialog.visible = true },
+        async handleSave() {
+          const valid = await this.$refs.formRef.validate().catch(() => false)
+          if (!valid) return
+          this.dialog.loading = true
+          try {
+            const body = {
+              className: this.form.className,
+              teacherId: this.form.teacherId,
+              description: this.form.description || ''
+            }
+            const url = this.dialog.isEdit
+              ? API_BASE + '/api/class/' + this.form.id
+              : API_BASE + '/api/class'
+            const method = this.dialog.isEdit ? 'PUT' : 'POST'
+            const res = await fetch(url, {
+              method,
+              headers: { 'Content-Type': 'application/json', 'token': localStorage.getItem('token') },
+              body: JSON.stringify(body)
+            })
+            const json = await res.json()
+            if (json.code === 200) {
+              ElementPlus.ElMessage.success(json.message || (this.dialog.isEdit ? '修改成功' : '新增成功'))
+              this.dialog.visible = false
+              this.fetchClasses()
+            } else {
+              ElementPlus.ElMessage.error(json.message || '操作失败')
+            }
+          } catch (e) {
+            ElementPlus.ElMessage.error('网络错误')
+          }
+          this.dialog.loading = false
+        },
+        handleDelete(row) {
+          ElementPlus.ElMessageBox.confirm(`确认删除班级"${row.className}"吗？`, '删除确认', { type: 'warning' })
+            .then(async () => {
+              try {
+                const res = await fetch(API_BASE + '/api/class/' + row.id, {
+                  method: 'DELETE',
+                  headers: { 'token': localStorage.getItem('token') }
+                })
+                const json = await res.json()
+                if (json.code === 200) {
+                  ElementPlus.ElMessage.success('删除成功')
+                  this.fetchClasses()
+                } else {
+                  ElementPlus.ElMessage.error(json.message || '删除失败')
+                }
+              } catch (e) {
+                ElementPlus.ElMessage.error('网络错误')
+              }
+            })
+            .catch(() => {})
+        },
+        resetForm() {
+          this.form = { id: null, className: '', teacherId: null, description: '' }
+          this.$nextTick(() => { if (this.$refs.formRef) this.$refs.formRef.clearValidate() })
+        }
+      }
+    }
+
+    const CourseManage = {
+      template: `
+        <div>
+          <el-card style="margin-bottom:16px;">
+            <el-row :gutter="12">
+              <el-col :span="6">
+                <el-input v-model="search.courseName" placeholder="输入课程名称搜索" clearable @keyup.enter="handleSearch"></el-input>
+              </el-col>
+              <el-col :span="4">
+                <el-button type="primary" @click="handleSearch">搜索</el-button>
+                <el-button @click="search.courseName='';handleSearch()">重置</el-button>
+              </el-col>
+              <el-col :span="14" style="text-align:right;">
+                <el-button type="primary" @click="openAdd">新增课程</el-button>
+              </el-col>
+            </el-row>
+          </el-card>
+
+          <el-card>
+            <el-table :data="courseList" stripe border style="width:100%;" v-loading="loading">
+              <el-table-column prop="courseName" label="课程名称" min-width="140"></el-table-column>
+              <el-table-column prop="description" label="课程描述" min-width="200" show-overflow-tooltip></el-table-column>
+              <el-table-column prop="teacherName" label="默认授课老师" width="110">
+                <template v-slot="{row}">{{ row.teacherName || '-' }}</template>
+              </el-table-column>
+              <el-table-column prop="maxScore" label="满分值" width="80" align="center"></el-table-column>
+              <el-table-column label="操作" width="140" fixed="right">
+                <template v-slot="{row}">
+                  <el-button type="primary" size="small" link @click="openEdit(row)">编辑</el-button>
+                  <el-button type="danger" size="small" link @click="handleDelete(row)">删除</el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+            <div style="margin-top:16px;text-align:right;">
+              <el-pagination
+                v-model:current-page="pagination.page"
+                v-model:page-size="pagination.pageSize"
+                :page-sizes="[10,20,50,100]"
+                :total="total"
+                layout="total,sizes,prev,pager,next,jumper"
+                @size-change="handlePageChange"
+                @current-change="handlePageChange"
+              ></el-pagination>
+            </div>
+          </el-card>
+
+          <el-dialog v-model="dialog.visible" :title="dialog.isEdit ? '编辑课程' : '新增课程'" width="500px" @close="resetForm">
+            <el-form ref="formRef" :model="form" :rules="formRules" label-width="110px">
+              <el-form-item label="课程名称" prop="courseName">
+                <el-input v-model="form.courseName" placeholder="如：高等数学"></el-input>
+              </el-form-item>
+              <el-form-item label="课程描述" prop="description">
+                <el-input v-model="form.description" type="textarea" :rows="2" placeholder="请输入课程描述"></el-input>
+              </el-form-item>
+              <el-form-item label="默认授课老师" prop="teacherId">
+                <el-select v-model="form.teacherId" placeholder="请选择授课老师（可选）" style="width:100%;" clearable>
+                  <el-option v-for="t in teacherOptions" :key="t.id" :label="t.realName" :value="t.id"></el-option>
+                </el-select>
+              </el-form-item>
+              <el-form-item label="满分值" prop="maxScore">
+                <el-input-number v-model="form.maxScore" :min="1" :max="999" style="width:100%;"></el-input-number>
+              </el-form-item>
+            </el-form>
+            <template #footer>
+              <el-button @click="dialog.visible = false">取消</el-button>
+              <el-button type="primary" :loading="dialog.loading" @click="handleSave">保存</el-button>
+            </template>
+          </el-dialog>
+        </div>
+      `,
+      data() {
+        return {
+          loading: false,
+          courseList: [],
+          total: 0,
+          search: { courseName: '' },
+          pagination: { page: 1, pageSize: 10 },
+          dialog: { visible: false, isEdit: false, loading: false },
+          form: { id: null, courseName: '', description: '', teacherId: null, maxScore: 100 },
+          formRules: { courseName: [{ required: true, message: '请输入课程名称', trigger: 'blur' }] },
+          teacherOptions: []
+        }
+      },
+      created() {
+        this.fetchTeacherOptions()
+        this.fetchCourses()
+      },
+      methods: {
+        async fetchTeacherOptions() {
+          try {
+            const res = await fetch(API_BASE + '/api/teacher/list', {
+              headers: { 'token': localStorage.getItem('token') }
+            })
+            const json = await res.json()
+            if (json.code === 200) {
+              this.teacherOptions = json.data
+            }
+          } catch (e) { /* 加载失败保持空列表 */ }
+        },
+        async fetchCourses() {
+          this.loading = true
+          try {
+            const params = new URLSearchParams()
+            params.append('page', this.pagination.page)
+            params.append('pageSize', this.pagination.pageSize)
+            if (this.search.courseName) params.append('courseName', this.search.courseName)
+            const res = await fetch(API_BASE + '/api/course/list?' + params.toString(), {
+              headers: { 'token': localStorage.getItem('token') }
+            })
+            const json = await res.json()
+            if (json.code === 200) {
+              this.courseList = json.data.list
+              this.total = json.data.total
+            }
+          } catch (e) { /* 加载失败保持空列表 */ }
+          this.loading = false
+        },
+        handleSearch() { this.pagination.page = 1; this.fetchCourses() },
+        handlePageChange() { this.fetchCourses() },
+        openAdd() { this.dialog.isEdit = false; this.dialog.visible = true },
+        openEdit(row) { this.dialog.isEdit = true; this.form = { ...row }; this.dialog.visible = true },
+        async handleSave() {
+          const valid = await this.$refs.formRef.validate().catch(() => false)
+          if (!valid) return
+          this.dialog.loading = true
+          try {
+            const body = {
+              courseName: this.form.courseName,
+              description: this.form.description || '',
+              teacherId: this.form.teacherId || null,
+              maxScore: this.form.maxScore
+            }
+            const url = this.dialog.isEdit
+              ? API_BASE + '/api/course/' + this.form.id
+              : API_BASE + '/api/course'
+            const method = this.dialog.isEdit ? 'PUT' : 'POST'
+            const res = await fetch(url, {
+              method,
+              headers: { 'Content-Type': 'application/json', 'token': localStorage.getItem('token') },
+              body: JSON.stringify(body)
+            })
+            const json = await res.json()
+            if (json.code === 200) {
+              ElementPlus.ElMessage.success(json.message || (this.dialog.isEdit ? '修改成功' : '新增成功'))
+              this.dialog.visible = false
+              this.fetchCourses()
+            } else {
+              ElementPlus.ElMessage.error(json.message || '操作失败')
+            }
+          } catch (e) {
+            ElementPlus.ElMessage.error('网络错误')
+          }
+          this.dialog.loading = false
+        },
+        handleDelete(row) {
+          ElementPlus.ElMessageBox.confirm(`确认删除课程"${row.courseName}"吗？`, '删除确认', { type: 'warning' })
+            .then(async () => {
+              try {
+                const res = await fetch(API_BASE + '/api/course/' + row.id, {
+                  method: 'DELETE',
+                  headers: { 'token': localStorage.getItem('token') }
+                })
+                const json = await res.json()
+                if (json.code === 200) {
+                  ElementPlus.ElMessage.success('删除成功')
+                  this.fetchCourses()
+                } else {
+                  ElementPlus.ElMessage.error(json.message || '删除失败')
+                }
+              } catch (e) {
+                ElementPlus.ElMessage.error('网络错误')
+              }
+            })
+            .catch(() => {})
+        },
+        resetForm() {
+          this.form = { id: null, courseName: '', description: '', teacherId: null, maxScore: 100 }
+          this.$nextTick(() => { if (this.$refs.formRef) this.$refs.formRef.clearValidate() })
+        }
+      }
+    }
+
+    const ScheduleManage = {
+      template: `
+        <div>
+          <el-card style="margin-bottom:16px;">
+            <el-row :gutter="12" align="middle">
+              <el-col :span="5">
+                <el-select v-model="selectedClassId" placeholder="请选择班级" style="width:100%;" @change="loadSchedule">
+                  <el-option v-for="c in classOptions" :key="c.id" :label="c.className" :value="c.id"></el-option>
+                </el-select>
+              </el-col>
+              <el-col :span="4">
+                <el-select v-model="copyTargetId" placeholder="复制到..." style="width:100%;" :disabled="!selectedClassId">
+                  <el-option v-for="c in copyTargets" :key="c.id" :label="c.className" :value="c.id"></el-option>
+                </el-select>
+              </el-col>
+              <el-col :span="3">
+                <el-button type="success" :disabled="!copyTargetId" @click="handleCopy">复制课表</el-button>
+              </el-col>
+              <el-col :span="12" style="text-align:right;">
+                <el-tag v-if="selectedClassId" type="info" size="large">
+                  {{ classOptions.find(c=>c.id===selectedClassId)?.className }} — 周课表
+                </el-tag>
+              </el-col>
+            </el-row>
+          </el-card>
+
+          <el-card v-if="!selectedClassId" style="height:400px;display:flex;align-items:center;justify-content:center;color:#909399;">
+            <div style="text-align:center;"><div style="font-size:48px;margin-bottom:16px;">📋</div><p>请先选择一个班级查看课表</p></div>
+          </el-card>
+
+          <el-card v-else>
+            <table class="schedule-table">
+              <thead>
+                <tr>
+                  <th class="period-col">节次</th>
+                  <th v-for="d in dayNames" :key="d">{{ d }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="p in 8" :key="p">
+                  <td class="period-col">第{{ p }}节</td>
+                  <td v-for="d in 5" :key="d"
+                    class="schedule-cell"
+                    :class="{ 'has-course': getCell(d, p) }"
+                    @click="openCell(d, p)"
+                  >
+                    <template v-if="getCell(d, p)">
+                      <div class="cell-course">{{ getCell(d, p).courseName }}</div>
+                      <div class="cell-teacher">{{ getCell(d, p).teacherName }}</div>
+                      <div class="cell-classroom" v-if="getCell(d, p).classroom">{{ getCell(d, p).classroom }}</div>
+                    </template>
+                    <template v-else>
+                      <div class="cell-empty">+ 添加课程</div>
+                    </template>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </el-card>
+
+          <el-dialog v-model="cellDialog.visible" :title="cellDialog.isEdit ? '修改排课' : '新增排课'" width="450px">
+            <el-form ref="cellFormRef" :model="cellForm" :rules="cellFormRules" label-width="90px">
+              <el-form-item label="班级">
+                <el-input :value="classOptions.find(c=>c.id===selectedClassId)?.className" disabled></el-input>
+              </el-form-item>
+              <el-form-item label="时间">
+                <el-input :value="dayNames[cellForm.dayOfWeek-1] + ' 第' + cellForm.period + '节'" disabled></el-input>
+              </el-form-item>
+              <el-form-item label="课程" prop="courseId">
+                <el-select v-model="cellForm.courseId" placeholder="请选择课程" style="width:100%;">
+                  <el-option v-for="c in courseOptions" :key="c.id" :label="c.courseName" :value="c.id"></el-option>
+                </el-select>
+              </el-form-item>
+              <el-form-item label="授课老师" prop="teacherId">
+                <el-select v-model="cellForm.teacherId" placeholder="请选择老师" style="width:100%;">
+                  <el-option v-for="t in teacherOptions" :key="t.id" :label="t.realName" :value="t.id"></el-option>
+                </el-select>
+              </el-form-item>
+              <el-form-item label="教室">
+                <el-input v-model="cellForm.classroom" placeholder="请输入教室，如：A201"></el-input>
+              </el-form-item>
+            </el-form>
+            <template #footer>
+              <el-button v-if="cellDialog.isEdit" type="danger" @click="handleDeleteCell">清空排课</el-button>
+              <el-button @click="cellDialog.visible = false">取消</el-button>
+              <el-button type="primary" @click="handleSaveCell">保存</el-button>
+            </template>
+          </el-dialog>
+        </div>
+      `,
+      data() {
+        return {
+          selectedClassId: null,
+          copyTargetId: null,
+          dayNames: ['周一', '周二', '周三', '周四', '周五'],
+          classOptions: [],
+          courseOptions: [],
+          teacherOptions: [],
+          scheduleList: [],
+          cellDialog: { visible: false, isEdit: false },
+          cellForm: { id: null, dayOfWeek: 1, period: 1, courseId: null, teacherId: null, classroom: '' },
+          cellFormRules: {
+            courseId: [{ required: true, message: '请选择课程', trigger: 'change' }],
+            teacherId: [{ required: true, message: '请选择老师', trigger: 'change' }]
+          }
+        }
+      },
+      computed: {
+        copyTargets() {
+          return this.classOptions.filter(c => c.id !== this.selectedClassId)
+        }
+      },
+      created() {
+        this.fetchClassOptions()
+        this.fetchCourseOptions()
+        this.fetchTeacherOptions()
+      },
+      methods: {
+        async fetchClassOptions() {
+          try {
+            const res = await fetch(API_BASE + '/api/class/options', {
+              headers: { 'token': localStorage.getItem('token') }
+            })
+            const json = await res.json()
+            if (json.code === 200) { this.classOptions = json.data }
+          } catch (e) { /* ignore */ }
+        },
+        async fetchCourseOptions() {
+          try {
+            const res = await fetch(API_BASE + '/api/course/options', {
+              headers: { 'token': localStorage.getItem('token') }
+            })
+            const json = await res.json()
+            if (json.code === 200) { this.courseOptions = json.data }
+          } catch (e) { /* ignore */ }
+        },
+        async fetchTeacherOptions() {
+          try {
+            const res = await fetch(API_BASE + '/api/teacher/list', {
+              headers: { 'token': localStorage.getItem('token') }
+            })
+            const json = await res.json()
+            if (json.code === 200) { this.teacherOptions = json.data }
+          } catch (e) { /* ignore */ }
+        },
+        async loadSchedule() {
+          this.copyTargetId = null
+          if (!this.selectedClassId) { this.scheduleList = []; return }
+          try {
+            const res = await fetch(API_BASE + '/api/schedule/' + this.selectedClassId, {
+              headers: { 'token': localStorage.getItem('token') }
+            })
+            const json = await res.json()
+            if (json.code === 200) {
+              this.scheduleList = json.data
+            }
+          } catch (e) { /* ignore */ }
+        },
+        getClassSchedules() {
+          return this.scheduleList
+        },
+        getCell(dayOfWeek, period) {
+          return this.scheduleList.find(s => s.dayOfWeek === dayOfWeek && s.period === period)
+        },
+        openCell(dayOfWeek, period) {
+          const existing = this.getCell(dayOfWeek, period)
+          if (existing) {
+            this.cellDialog.isEdit = true
+            this.cellForm = { ...existing }
+          } else {
+            this.cellDialog.isEdit = false
+            this.cellForm = { id: null, dayOfWeek, period, courseId: null, teacherId: null, classroom: '' }
+          }
+          this.cellDialog.visible = true
+          this.$nextTick(() => { if (this.$refs.cellFormRef) this.$refs.cellFormRef.clearValidate() })
+        },
+        async handleSaveCell() {
+          const valid = await this.$refs.cellFormRef.validate().catch(() => false)
+          if (!valid) return
+          const { id, dayOfWeek, period, courseId, teacherId, classroom } = this.cellForm
+          try {
+            if (this.cellDialog.isEdit) {
+              const res = await fetch(API_BASE + '/api/schedule/' + id, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', 'token': localStorage.getItem('token') },
+                body: JSON.stringify({ courseId, teacherId, classroom })
+              })
+              const json = await res.json()
+              if (json.code === 200) {
+                ElementPlus.ElMessage.success('修改成功')
+                this.cellDialog.visible = false
+                this.loadSchedule()
+              } else {
+                ElementPlus.ElMessage.error(json.message || '修改失败')
+              }
+            } else {
+              const res = await fetch(API_BASE + '/api/schedule', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'token': localStorage.getItem('token') },
+                body: JSON.stringify({ classId: this.selectedClassId, courseId, teacherId, classroom, dayOfWeek, period })
+              })
+              const json = await res.json()
+              if (json.code === 200) {
+                ElementPlus.ElMessage.success('排课成功')
+                this.cellDialog.visible = false
+                this.loadSchedule()
+              } else {
+                ElementPlus.ElMessage.error(json.message || '排课失败')
+              }
+            }
+          } catch (e) {
+            ElementPlus.ElMessage.error('网络错误')
+          }
+        },
+        handleDeleteCell() {
+          ElementPlus.ElMessageBox.confirm('确认清空该时间段的课程吗？', '清空确认', { type: 'warning' })
+            .then(async () => {
+              try {
+                const res = await fetch(API_BASE + '/api/schedule/' + this.cellForm.id, {
+                  method: 'DELETE',
+                  headers: { 'token': localStorage.getItem('token') }
+                })
+                const json = await res.json()
+                if (json.code === 200) {
+                  this.cellDialog.visible = false
+                  ElementPlus.ElMessage.success('已清空')
+                  this.loadSchedule()
+                } else {
+                  ElementPlus.ElMessage.error(json.message || '删除失败')
+                }
+              } catch (e) {
+                ElementPlus.ElMessage.error('网络错误')
+              }
+            })
+            .catch(() => {})
+        },
+        async handleCopy() {
+          if (!this.copyTargetId) return
+          try {
+            const res = await fetch(API_BASE + '/api/schedule/copy', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'token': localStorage.getItem('token') },
+              body: JSON.stringify({ sourceClassId: this.selectedClassId, targetClassId: this.copyTargetId })
+            })
+            const json = await res.json()
+            if (json.code === 200) {
+              ElementPlus.ElMessage.success('课表复制成功')
+              this.copyTargetId = null
+            } else {
+              ElementPlus.ElMessage.error(json.message || '复制失败')
+            }
+          } catch (e) {
+            ElementPlus.ElMessage.error('网络错误')
+          }
+        }
+      }
+    }
+
+    const AttendanceManage = {
+      template: `
+        <div>
+          <el-card style="margin-bottom:16px;">
+            <el-row :gutter="12" align="middle">
+              <el-col :span="5">
+                <el-select v-model="params.classId" placeholder="请选择班级" style="width:100%;" @change="loadStudents">
+                  <el-option v-for="c in classOptions" :key="c.id" :label="c.className" :value="c.id"></el-option>
+                </el-select>
+              </el-col>
+              <el-col :span="4">
+                <el-date-picker v-model="params.date" type="date" placeholder="选择日期" value-format="YYYY-MM-DD" style="width:100%;" @change="loadStudents"></el-date-picker>
+              </el-col>
+              <el-col :span="4">
+                <el-button type="primary" :disabled="!params.classId" @click="markAllPresent">一键全勤</el-button>
+              </el-col>
+              <el-col :span="4">
+                <el-button type="success" :disabled="!params.classId" :loading="saving" @click="handleSave">保存考勤</el-button>
+              </el-col>
+              <el-col :span="7" style="text-align:right;">
+                <el-tag v-if="params.classId" type="info" size="large">
+                  {{ dayNames[new Date(params.date).getDay()] || '日' }}
+                </el-tag>
+              </el-col>
+            </el-row>
+          </el-card>
+
+          <el-card v-if="!params.classId" style="height:300px;display:flex;align-items:center;justify-content:center;color:#909399;">
+            <p>请先选择班级查看考勤</p>
+          </el-card>
+
+          <el-card v-else>
+            <div v-if="studentList.length === 0" style="text-align:center;padding:60px;color:#909399;">
+              <p>该班级暂无学生</p>
+            </div>
+            <el-table v-else :data="studentList" stripe border style="width:100%;">
+              <el-table-column prop="studentNo" label="学号" width="110"></el-table-column>
+              <el-table-column prop="studentName" label="姓名" width="100"></el-table-column>
+              <el-table-column label="出勤状态" min-width="360">
+                <template v-slot="{row}">
+                  <el-radio-group v-model="row.status" size="small">
+                    <el-radio-button :value="1" :disabled="!canEdit">{{ statusMap[1] }}</el-radio-button>
+                    <el-radio-button :value="2" :disabled="!canEdit">{{ statusMap[2] }}</el-radio-button>
+                    <el-radio-button :value="3" :disabled="!canEdit">{{ statusMap[3] }}</el-radio-button>
+                    <el-radio-button :value="4" :disabled="!canEdit">{{ statusMap[4] }}</el-radio-button>
+                  </el-radio-group>
+                </template>
+              </el-table-column>
+            </el-table>
+          </el-card>
+        </div>
+      `,
+      data() {
+        return {
+          params: { classId: null, date: new Date().toISOString().slice(0,10) },
+          saving: false,
+          loading: false,
+          statusMap: { 1:'出勤', 2:'迟到', 3:'请假', 4:'缺勤' },
+          classOptions: [],
+          studentList: []
+        }
+      },
+      computed: {
+        canEdit() { return true },
+        dayNames() { return ['','日','一','二','三','四','五','六'] }
+      },
+      created() { this.fetchClassOptions() },
+      methods: {
+        async fetchClassOptions() {
+          try {
+            const res = await fetch(API_BASE + '/api/class/options', {
+              headers: { 'token': localStorage.getItem('token') }
+            })
+            const json = await res.json()
+            if (json.code === 200) { this.classOptions = json.data }
+          } catch (e) { /* ignore */ }
+        },
+        async loadStudents() {
+          if (!this.params.classId) { this.studentList = []; return }
+          this.loading = true
+          try {
+            const res = await fetch(
+              API_BASE + '/api/attendance/students?classId=' + this.params.classId + '&attendanceDate=' + this.params.date,
+              { headers: { 'token': localStorage.getItem('token') } }
+            )
+            const json = await res.json()
+            if (json.code === 200) {
+              this.studentList = json.data
+            }
+          } catch (e) { /* ignore */ }
+          this.loading = false
+        },
+        markAllPresent() {
+          this.studentList.forEach(s => { s.status = 1 })
+          ElementPlus.ElMessage.success('已全部标记为出勤')
+        },
+        handleSave() {
+          const unmarked = this.studentList.filter(s => !s.status)
+          if (unmarked.length > 0) {
+            ElementPlus.ElMessageBox.confirm(
+              `还有 ${unmarked.length} 名学生未标记出勤状态，是否继续保存？`,
+              '保存确认', { type: 'warning', confirmButtonText: '继续保存', cancelButtonText: '取消' }
+            ).then(() => { this.doSave() }).catch(() => {})
+          } else {
+            this.doSave()
+          }
+        },
+        async doSave() {
+          this.saving = true
+          try {
+            const records = this.studentList
+              .filter(s => s.status)
+              .map(s => ({ studentId: s.studentId, status: s.status }))
+            const res = await fetch(API_BASE + '/api/attendance/batch', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'token': localStorage.getItem('token') },
+              body: JSON.stringify({
+                classId: this.params.classId,
+                attendanceDate: this.params.date,
+                records
+              })
+            })
+            const json = await res.json()
+            if (json.code === 200) {
+              ElementPlus.ElMessage.success(`考勤保存成功，共 ${records.length} 人`)
+              this.loadStudents()
+            } else {
+              ElementPlus.ElMessage.error(json.message || '保存失败')
+            }
+          } catch (e) {
+            ElementPlus.ElMessage.error('网络错误')
+          }
+          this.saving = false
+        }
+      }
+    }
+
+    const ScoreManage = {
+      template: `
+        <div>
+          <el-tabs v-model="activeTab">
+            <!-- ========== 按班级录入 ========== -->
+            <el-tab-pane label="按班级录入" name="entry">
+              <el-card style="margin-bottom:16px;">
+                <el-row :gutter="12" align="middle">
+                  <el-col :span="4">
+                    <el-select v-model="entry.classId" placeholder="选择班级" style="width:100%;" clearable>
+                      <el-option v-for="c in classOptions" :key="c.id" :label="c.className" :value="c.id"></el-option>
+                    </el-select>
+                  </el-col>
+                  <el-col :span="4">
+                    <el-select v-model="entry.courseId" placeholder="选择课程" style="width:100%;" clearable>
+                      <el-option v-for="c in courseOptions" :key="c.id" :label="c.courseName" :value="c.id"></el-option>
+                    </el-select>
+                  </el-col>
+                  <el-col :span="3">
+                    <el-select v-model="entry.examType" placeholder="考试类型" style="width:100%;" filterable allow-create>
+                      <el-option v-for="t in examTypeOptions" :key="t" :label="t" :value="t"></el-option>
+                    </el-select>
+                  </el-col>
+                  <el-col :span="3">
+                    <el-date-picker v-model="entry.examDate" type="date" value-format="YYYY-MM-DD" placeholder="考试日期" style="width:100%;"></el-date-picker>
+                  </el-col>
+                  <el-col :span="4">
+                    <el-button type="primary" :disabled="!canQueryEntry" @click="loadEntryStudents">加载学生</el-button>
+                  </el-col>
+                  <el-col :span="6" style="text-align:right;">
+                    <el-tag v-if="currentCourse" type="info">满分：{{ currentCourse.maxScore }}</el-tag>
+                  </el-col>
+                </el-row>
+              </el-card>
+
+              <el-card v-if="entryList.length > 0">
+                <el-table :data="entryList" stripe border style="width:100%;">
+                  <el-table-column prop="studentNo" label="学号" width="110"></el-table-column>
+                  <el-table-column prop="studentName" label="姓名" width="100"></el-table-column>
+                  <el-table-column label="分数">
+                    <template v-slot="{row}">
+                      <el-input-number v-model="row.score" :min="0" :max="currentCourse.maxScore" :precision="1" size="small" style="width:130px;" placeholder="输入分数"></el-input-number>
+                    </template>
+                  </el-table-column>
+                </el-table>
+                <div style="margin-top:16px;text-align:right;">
+                  <el-button type="success" :loading="entrySaving" @click="handleBatchSave">批量保存</el-button>
+                </div>
+              </el-card>
+
+              <el-card v-else-if="entry.courseId && entry.classId && entry.examType && entry.examDate" style="height:200px;display:flex;align-items:center;justify-content:center;color:#909399;">
+                <p>请点击"加载学生"查看列表</p>
+              </el-card>
+            </el-tab-pane>
+
+            <!-- ========== 按学生查询 ========== -->
+            <el-tab-pane label="按学生查询" name="query">
+              <el-card style="margin-bottom:16px;">
+                <el-row :gutter="12">
+                  <el-col :span="6">
+                    <el-input v-model="query.keyword" placeholder="输入姓名或学号" clearable @keyup.enter="searchStudent"></el-input>
+                  </el-col>
+                  <el-col :span="4">
+                    <el-button type="primary" @click="searchStudent">搜索</el-button>
+                  </el-col>
+                </el-row>
+                <div v-if="queryResults.length > 0" style="margin-top:12px;">
+                  <el-tag v-for="s in queryResults" :key="s.id" style="margin:4px;cursor:pointer;"
+                    :type="query.selectedId === s.id ? '' : 'info'"
+                    :effect="query.selectedId === s.id ? 'dark' : 'plain'"
+                    @click="selectQueryStudent(s)">{{ s.studentNo }} {{ s.name }}</el-tag>
+                </div>
+              </el-card>
+
+              <el-card v-if="queryScores.length > 0">
+                <div style="margin-bottom:12px;font-weight:600;">
+                  {{ query.selectedStudent?.studentNo }} {{ query.selectedStudent?.name }} 的成绩
+                </div>
+                <el-table :data="queryScores" stripe border style="width:100%;">
+                  <el-table-column prop="courseName" label="课程" width="140"></el-table-column>
+                  <el-table-column prop="examType" label="考试类型" width="120"></el-table-column>
+                  <el-table-column label="分数" width="120" align="center">
+                    <template v-slot="{row}">
+                      <template v-if="row.editing">
+                        <el-input-number v-model="row.editScore" :min="0" :max="row.maxScore || 100" :precision="1" size="small" style="width:100px;"></el-input-number>
+                        <el-button type="primary" size="small" link @click="saveEditScore(row)">保存</el-button>
+                        <el-button size="small" link @click="row.editing=false">取消</el-button>
+                      </template>
+                      <template v-else>{{ row.score }}</template>
+                    </template>
+                  </el-table-column>
+                  <el-table-column prop="examDate" label="考试日期" width="120"></el-table-column>
+                  <el-table-column label="操作" width="120">
+                    <template v-slot="{row}">
+                      <el-button v-if="!row.editing" type="primary" size="small" link @click="startEditScore(row)">修改</el-button>
+                      <el-button type="danger" size="small" link @click="deleteScore(row)">删除</el-button>
+                    </template>
+                  </el-table-column>
+                </el-table>
+              </el-card>
+
+              <el-card v-else-if="query.selectedId" style="height:200px;display:flex;align-items:center;justify-content:center;color:#909399;">
+                <p>该学生暂无成绩记录</p>
+              </el-card>
+            </el-tab-pane>
+          </el-tabs>
+        </div>
+      `,
+      data() {
+        return {
+          activeTab: 'entry',
+          classOptions: [],
+          courseOptions: [],
+          examTypeOptions: ['期中考试', '期末考试', '月考', '日常测验'],
+          // 按班级录入
+          entry: { classId:null, courseId:null, examType:'', examDate:'' },
+          entryList: [],
+          entrySaving: false,
+          // 按学生查询
+          query: { keyword:'', selectedId:null, selectedStudent:null },
+          queryResults: [],
+          queryScores: []
+        }
+      },
+      computed: {
+        currentCourse() { return this.courseOptions.find(c => c.id === this.entry.courseId) || { maxScore:100 } },
+        canQueryEntry() { return this.entry.classId && this.entry.courseId && this.entry.examType && this.entry.examDate }
+      },
+      created() {
+        this.fetchClassOptions()
+        this.fetchCourseOptions()
+      },
+      methods: {
+        async fetchClassOptions() {
+          try {
+            const res = await fetch(API_BASE + '/api/class/options', {
+              headers: { 'token': localStorage.getItem('token') }
+            })
+            const json = await res.json()
+            if (json.code === 200) { this.classOptions = json.data }
+          } catch (e) { /* ignore */ }
+        },
+        async fetchCourseOptions() {
+          try {
+            const res = await fetch(API_BASE + '/api/course/list?pageSize=999', {
+              headers: { 'token': localStorage.getItem('token') }
+            })
+            const json = await res.json()
+            if (json.code === 200) {
+              this.courseOptions = json.data.list
+            }
+          } catch (e) { /* ignore */ }
+        },
+        // 按班级录入
+        async loadEntryStudents() {
+          if (!this.canQueryEntry) return
+          try {
+            const [studentRes, scoreRes] = await Promise.all([
+              fetch(API_BASE + '/api/student/list?classId=' + this.entry.classId + '&pageSize=999', {
+                headers: { 'token': localStorage.getItem('token') }
+              }),
+              fetch(API_BASE + '/api/score/list?classId=' + this.entry.classId + '&courseId=' + this.entry.courseId + '&examType=' + encodeURIComponent(this.entry.examType) + '&pageSize=999', {
+                headers: { 'token': localStorage.getItem('token') }
+              })
+            ])
+            const [studentJson, scoreJson] = await Promise.all([studentRes.json(), scoreRes.json()])
+            const scoreMap = {}
+            if (scoreJson.code === 200) {
+              scoreJson.data.list.forEach(s => { scoreMap[s.studentId] = s.score })
+            }
+            if (studentJson.code === 200) {
+              this.entryList = studentJson.data.list.map(s => ({
+                studentId: s.id, studentNo: s.studentNo, studentName: s.name,
+                score: scoreMap[s.id] !== undefined ? scoreMap[s.id] : null
+              }))
+            }
+          } catch (e) { /* ignore */ }
+        },
+        async handleBatchSave() {
+          const maxScore = this.currentCourse.maxScore
+          for (const item of this.entryList) {
+            if (item.score !== null && item.score !== undefined) {
+              if (item.score < 0) { ElementPlus.ElMessage.error('分数不能为负数'); return }
+              if (item.score > maxScore) { ElementPlus.ElMessage.error(`分数不能超过满分 ${maxScore} 分`); return }
+            }
+          }
+          this.entrySaving = true
+          try {
+            const records = this.entryList
+              .filter(s => s.score !== null && s.score !== undefined)
+              .map(s => ({ studentId: s.studentId, score: s.score }))
+            const res = await fetch(API_BASE + '/api/score/batch', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'token': localStorage.getItem('token') },
+              body: JSON.stringify({
+                courseId: this.entry.courseId,
+                examType: this.entry.examType,
+                examDate: this.entry.examDate,
+                records
+              })
+            })
+            const json = await res.json()
+            if (json.code === 200) {
+              ElementPlus.ElMessage.success(`成绩录入成功，共 ${records.length} 人`)
+            } else {
+              ElementPlus.ElMessage.error(json.message || '保存失败')
+            }
+          } catch (e) {
+            ElementPlus.ElMessage.error('网络错误')
+          }
+          this.entrySaving = false
+        },
+        // 按学生查询
+        async searchStudent() {
+          const kw = this.query.keyword.trim()
+          if (!kw) return
+          try {
+            const res = await fetch(API_BASE + '/api/student/list?name=' + encodeURIComponent(kw) + '&pageSize=20', {
+              headers: { 'token': localStorage.getItem('token') }
+            })
+            const json = await res.json()
+            if (json.code === 200) {
+              this.queryResults = json.data.list
+            }
+          } catch (e) { /* ignore */ }
+          this.queryScores = []
+          this.query.selectedId = null
+          this.query.selectedStudent = null
+        },
+        async selectQueryStudent(student) {
+          this.query.selectedId = student.id
+          this.query.selectedStudent = student
+          try {
+            const res = await fetch(API_BASE + '/api/score/student/' + student.id, {
+              headers: { 'token': localStorage.getItem('token') }
+            })
+            const json = await res.json()
+            if (json.code === 200) {
+              this.queryScores = json.data.map(s => ({ ...s, editing: false, editScore: s.score }))
+            }
+          } catch (e) { /* ignore */ }
+        },
+        startEditScore(row) { row.editing = true; row.editScore = row.score },
+        async saveEditScore(row) {
+          const maxScore = this.courseOptions.find(c => c.id === row.courseId)?.maxScore || 100
+          if (row.editScore < 0) { ElementPlus.ElMessage.error('分数不能为负数'); return }
+          if (row.editScore > maxScore) { ElementPlus.ElMessage.error(`分数不能超过满分 ${maxScore} 分`); return }
+          try {
+            const res = await fetch(API_BASE + '/api/score/' + row.id, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json', 'token': localStorage.getItem('token') },
+              body: JSON.stringify({ score: row.editScore })
+            })
+            const json = await res.json()
+            if (json.code === 200) {
+              row.score = row.editScore
+              row.editing = false
+              ElementPlus.ElMessage.success('修改成功')
+            } else {
+              ElementPlus.ElMessage.error(json.message || '修改失败')
+            }
+          } catch (e) {
+            ElementPlus.ElMessage.error('网络错误')
+          }
+        },
+        deleteScore(row) {
+          ElementPlus.ElMessageBox.confirm('确认删除该成绩记录吗？', '删除确认', { type: 'warning' })
+            .then(async () => {
+              try {
+                const res = await fetch(API_BASE + '/api/score/' + row.id, {
+                  method: 'DELETE',
+                  headers: { 'token': localStorage.getItem('token') }
+                })
+                const json = await res.json()
+                if (json.code === 200) {
+                  this.queryScores = this.queryScores.filter(s => s.id !== row.id)
+                  ElementPlus.ElMessage.success('删除成功')
+                } else {
+                  ElementPlus.ElMessage.error(json.message || '删除失败')
+                }
+              } catch (e) {
+                ElementPlus.ElMessage.error('网络错误')
+              }
+            })
+            .catch(() => {})
+        }
+      }
+    }
+
+    const HomeworkManage = {
+      template: `
+        <div>
+          <!-- ========== 作业列表 Tab ========== -->
+          <template v-if="!detail.homeworkId">
+            <el-card style="margin-bottom:16px;">
+              <el-row :gutter="12">
+                <el-col :span="5">
+                  <el-select v-model="filter.classId" placeholder="按班级筛选" style="width:100%;" clearable @change="fetchHomeworkList">
+                    <el-option v-for="c in classOptions" :key="c.id" :label="c.className" :value="c.id"></el-option>
+                  </el-select>
+                </el-col>
+                <el-col :span="5">
+                  <el-select v-model="filter.courseId" placeholder="按课程筛选" style="width:100%;" clearable @change="fetchHomeworkList">
+                    <el-option v-for="c in courseOptions" :key="c.id" :label="c.courseName" :value="c.id"></el-option>
+                  </el-select>
+                </el-col>
+                <el-col :span="14" style="text-align:right;">
+                  <el-button type="primary" @click="openPublish">发布作业</el-button>
+                </el-col>
+              </el-row>
+            </el-card>
+
+            <el-card>
+              <el-table :data="homeworkList" stripe border style="width:100%;" v-loading="loading">
+                <el-table-column prop="title" label="作业标题" min-width="180" show-overflow-tooltip></el-table-column>
+                <el-table-column prop="className" label="班级" width="160"></el-table-column>
+                <el-table-column prop="courseName" label="课程" width="100"></el-table-column>
+                <el-table-column prop="deadline" label="截止时间" width="150"></el-table-column>
+                <el-table-column label="已提交" width="80" align="center">
+                  <template v-slot="{row}">{{ row.submitCount }}</template>
+                </el-table-column>
+                <el-table-column label="待批改" width="80" align="center">
+                  <template v-slot="{row}">{{ row.pendingGradeCount }}</template>
+                </el-table-column>
+                <el-table-column label="操作" width="160" fixed="right">
+                  <template v-slot="{row}">
+                    <el-button type="primary" size="small" link @click="openDetail(row)">详情</el-button>
+                    <el-button type="danger" size="small" link @click="handleDeleteHw(row)">删除</el-button>
+                  </template>
+                </el-table-column>
+              </el-table>
+              <div style="margin-top:16px;text-align:right;">
+                <el-pagination
+                  v-model:current-page="pagination.page"
+                  v-model:page-size="pagination.pageSize"
+                  :page-sizes="[10, 20, 50]"
+                  :total="total"
+                  layout="total, sizes, prev, pager, next"
+                  @size-change="fetchHomeworkList"
+                  @current-change="fetchHomeworkList">
+                </el-pagination>
+              </div>
+            </el-card>
+          </template>
+
+          <!-- ========== 作业详情 Tab ========== -->
+          <template v-else>
+            <el-card style="margin-bottom:16px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;">
+                <div>
+                  <el-button @click="detail.homeworkId=null" style="margin-right:12px;">← 返回列表</el-button>
+                  <span style="font-size:18px;font-weight:600;">{{ detail.title }}</span>
+                </div>
+                <div style="color:#909399;font-size:14px;">
+                  {{ detail.className }} | {{ detail.courseName }} | 截止：{{ detail.deadline }} | 满分：{{ detail.maxScore }}
+                </div>
+              </div>
+            </el-card>
+
+            <el-card>
+              <el-table :data="detail.submissions" stripe border style="width:100%;">
+                <el-table-column prop="studentNo" label="学号" width="110"></el-table-column>
+                <el-table-column prop="studentName" label="姓名" width="100"></el-table-column>
+                <el-table-column label="提交状态" width="100" align="center">
+                  <template v-slot="{row}">
+                    <el-tag v-if="row.submitStatus===0" type="info" size="small">未提交</el-tag>
+                    <el-tag v-else-if="row.submitStatus===1" type="success" size="small">已提交</el-tag>
+                    <el-tag v-else type="warning" size="small">迟交</el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="submitTime" label="提交时间" width="150"></el-table-column>
+                <el-table-column label="得分" width="80" align="center">
+                  <template v-slot="{row}">{{ row.score !== null ? row.score : '-' }}</template>
+                </el-table-column>
+                <el-table-column prop="comment" label="评语" min-width="160" show-overflow-tooltip></el-table-column>
+                <el-table-column label="操作" width="160" fixed="right">
+                  <template v-slot="{row}">
+                    <el-button v-if="row.submitStatus===0" type="primary" size="small" link @click="handleSubmit(row)">提交</el-button>
+                    <el-button v-if="row.submitStatus!==0" type="success" size="small" link @click="openGrade(row)">批改</el-button>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </el-card>
+          </template>
+
+          <!-- 发布作业弹窗 -->
+          <el-dialog v-model="pubDialog.visible" title="发布作业" width="520px" @close="resetPubForm">
+            <el-form ref="pubFormRef" :model="pubForm" :rules="pubRules" label-width="90px">
+              <el-form-item label="作业标题" prop="title">
+                <el-input v-model="pubForm.title" placeholder="请输入作业标题"></el-input>
+              </el-form-item>
+              <el-form-item label="作业描述" prop="description">
+                <el-input v-model="pubForm.description" type="textarea" :rows="3" placeholder="请输入作业描述/要求"></el-input>
+              </el-form-item>
+              <el-form-item label="班级" prop="classId">
+                <el-select v-model="pubForm.classId" placeholder="选择班级" style="width:100%;">
+                  <el-option v-for="c in classOptions" :key="c.id" :label="c.className" :value="c.id"></el-option>
+                </el-select>
+              </el-form-item>
+              <el-form-item label="课程" prop="courseId">
+                <el-select v-model="pubForm.courseId" placeholder="选择课程" style="width:100%;">
+                  <el-option v-for="c in courseOptions" :key="c.id" :label="c.courseName" :value="c.id"></el-option>
+                </el-select>
+              </el-form-item>
+              <el-form-item label="截止时间" prop="deadline">
+                <el-date-picker v-model="pubForm.deadline" type="datetime" value-format="YYYY-MM-DD HH:mm:ss" placeholder="选择截止时间" style="width:100%;"></el-date-picker>
+              </el-form-item>
+              <el-form-item label="满分值" prop="maxScore">
+                <el-input-number v-model="pubForm.maxScore" :min="1" :max="999" style="width:100%;"></el-input-number>
+              </el-form-item>
+            </el-form>
+            <template #footer>
+              <el-button @click="pubDialog.visible = false">取消</el-button>
+              <el-button type="primary" :loading="pubDialog.loading" @click="handlePublish">发布</el-button>
+            </template>
+          </el-dialog>
+
+          <!-- 批改弹窗 -->
+          <el-dialog v-model="gradeDialog.visible" title="批改打分" width="420px">
+            <el-form ref="gradeFormRef" :model="gradeForm" :rules="gradeRules" label-width="80px">
+              <el-form-item label="学生">
+                <el-input :value="gradeDialog.studentName" disabled></el-input>
+              </el-form-item>
+              <el-form-item label="得分" prop="score">
+                <el-input-number v-model="gradeForm.score" :min="0" :max="detail.maxScore" :precision="1" style="width:100%;"></el-input-number>
+              </el-form-item>
+              <el-form-item label="评语" prop="comment">
+                <el-input v-model="gradeForm.comment" placeholder="请输入评语（选填）"></el-input>
+              </el-form-item>
+            </el-form>
+            <template #footer>
+              <el-button @click="gradeDialog.visible = false">取消</el-button>
+              <el-button type="primary" @click="handleGrade">保存</el-button>
+            </template>
+          </el-dialog>
+        </div>
+      `,
+      data() {
+        return {
+          filter: { classId: null, courseId: null },
+          classOptions: [],
+          courseOptions: [],
+          homeworkList: [],
+          total: 0,
+          loading: false,
+          pagination: { page: 1, pageSize: 10 },
+          pubDialog: { visible: false, loading: false },
+          pubForm: { title:'', description:'', classId:null, courseId:null, deadline:'', maxScore:100 },
+          pubRules: {
+            title: [{ required: true, message: '请输入作业标题', trigger: 'blur' }],
+            description: [{ required: true, message: '请输入作业描述', trigger: 'blur' }],
+            classId: [{ required: true, message: '请选择班级', trigger: 'change' }],
+            courseId: [{ required: true, message: '请选择课程', trigger: 'change' }],
+            deadline: [{ required: true, message: '请选择截止时间', trigger: 'change' }]
+          },
+          detail: { homeworkId: null, title:'', className:'', courseName:'', deadline:'', maxScore:100, submissions:[] },
+          gradeDialog: { visible: false, studentName:'', submissionId:null },
+          gradeForm: { score: null, comment: '' },
+          gradeRules: { score: [{ required: true, message: '请输入得分', trigger: 'blur' }] }
+        }
+      },
+      created() { this.initDropdowns(); this.fetchHomeworkList() },
+      methods: {
+        async initDropdowns() {
+          const token = localStorage.getItem('token')
+          const headers = { 'token': token }
+          try {
+            const [classRes, courseRes] = await Promise.all([
+              fetch(API_BASE + '/api/class/options', { headers }),
+              fetch(API_BASE + '/api/course/options', { headers })
+            ])
+            const [classJson, courseJson] = await Promise.all([classRes.json(), courseRes.json()])
+            if (classJson.code === 200) this.classOptions = classJson.data
+            if (courseJson.code === 200) this.courseOptions = courseJson.data
+          } catch (e) {}
+        },
+        async fetchHomeworkList() {
+          this.loading = true
+          const params = new URLSearchParams()
+          params.append('page', this.pagination.page)
+          params.append('pageSize', this.pagination.pageSize)
+          if (this.filter.classId) params.append('classId', this.filter.classId)
+          if (this.filter.courseId) params.append('courseId', this.filter.courseId)
+          try {
+            const res = await fetch(API_BASE + '/api/homework/list?' + params.toString(), {
+              headers: { 'token': localStorage.getItem('token') }
+            })
+            const json = await res.json()
+            if (json.code === 200) {
+              this.homeworkList = json.data.list
+              this.total = json.data.total
+            }
+          } catch (e) {}
+          this.loading = false
+        },
+        openPublish() { this.pubDialog.visible = true },
+        async handlePublish() {
+          const valid = await this.$refs.pubFormRef.validate().catch(() => false)
+          if (!valid) return
+          this.pubDialog.loading = true
+          try {
+            const res = await fetch(API_BASE + '/api/homework', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'token': localStorage.getItem('token')
+              },
+              body: JSON.stringify(this.pubForm)
+            })
+            const json = await res.json()
+            if (json.code === 200) {
+              ElementPlus.ElMessage.success('发布成功')
+              this.pubDialog.visible = false
+              this.pagination.page = 1
+              this.fetchHomeworkList()
+            } else {
+              ElementPlus.ElMessage.error(json.message || '发布失败')
+            }
+          } catch (e) {
+            ElementPlus.ElMessage.error('网络错误')
+          }
+          this.pubDialog.loading = false
+        },
+        async handleDeleteHw(row) {
+          const msg = row.submitCount > 0
+            ? `该作业已有${row.submitCount}名学生提交，确认删除？`
+            : `确认删除作业"${row.title}"吗？`
+          try {
+            await ElementPlus.ElMessageBox.confirm(msg, '删除确认', { type: 'warning' })
+          } catch (e) { return }
+          try {
+            const res = await fetch(API_BASE + '/api/homework/' + row.id, {
+              method: 'DELETE',
+              headers: { 'token': localStorage.getItem('token') }
+            })
+            const json = await res.json()
+            if (json.code === 200) {
+              ElementPlus.ElMessage.success('删除成功')
+              this.fetchHomeworkList()
+            } else {
+              ElementPlus.ElMessage.error(json.message || '删除失败')
+            }
+          } catch (e) {
+            ElementPlus.ElMessage.error('网络错误')
+          }
+        },
+        async openDetail(hw) {
+          this.detail = {
+            homeworkId: hw.id, title: hw.title, className: hw.className,
+            courseName: hw.courseName, deadline: hw.deadline, maxScore: hw.maxScore,
+            submissions: []
+          }
+          try {
+            const res = await fetch(API_BASE + '/api/homework/' + hw.id + '/submissions', {
+              headers: { 'token': localStorage.getItem('token') }
+            })
+            const json = await res.json()
+            if (json.code === 200) {
+              this.detail.submissions = json.data
+            }
+          } catch (e) {}
+        },
+        async handleSubmit(row) {
+          const now = new Date()
+          const time = now.getFullYear() + '-' +
+            String(now.getMonth() + 1).padStart(2, '0') + '-' +
+            String(now.getDate()).padStart(2, '0') + ' ' +
+            String(now.getHours()).padStart(2, '0') + ':' +
+            String(now.getMinutes()).padStart(2, '0') + ':' +
+            String(now.getSeconds()).padStart(2, '0')
+          try {
+            const res = await fetch(API_BASE + '/api/homework-submission', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'token': localStorage.getItem('token')
+              },
+              body: JSON.stringify({
+                homeworkId: this.detail.homeworkId,
+                studentId: row.studentId,
+                submitTime: time
+              })
+            })
+            const json = await res.json()
+            if (json.code === 200) {
+              row.submitStatus = json.data.submitStatus
+              row.submitTime = time
+              ElementPlus.ElMessage.success(json.data.submitStatus === 2 ? '已提交（迟交）' : '提交成功')
+            } else {
+              ElementPlus.ElMessage.error(json.message || '提交失败')
+            }
+          } catch (e) {
+            ElementPlus.ElMessage.error('网络错误')
+          }
+        },
+        openGrade(row) {
+          this.gradeDialog.visible = true
+          this.gradeDialog.submissionId = row.id
+          this.gradeDialog.studentName = row.studentName
+          this.gradeForm.score = row.score
+          this.gradeForm.comment = row.comment || ''
+        },
+        async handleGrade() {
+          const valid = await this.$refs.gradeFormRef.validate().catch(() => false)
+          if (!valid) return
+          if (this.gradeForm.score > this.detail.maxScore) {
+            ElementPlus.ElMessage.error(`得分不能超过满分${this.detail.maxScore}分`); return
+          }
+          try {
+            const res = await fetch(API_BASE + '/api/homework-submission/' + this.gradeDialog.submissionId + '/grade', {
+              method: 'PUT',
+              headers: {
+                'Content-Type': 'application/json',
+                'token': localStorage.getItem('token')
+              },
+              body: JSON.stringify({
+                score: this.gradeForm.score,
+                comment: this.gradeForm.comment
+              })
+            })
+            const json = await res.json()
+            if (json.code === 200) {
+              const detailRow = this.detail.submissions.find(s => s.id === this.gradeDialog.submissionId)
+              if (detailRow) { detailRow.score = this.gradeForm.score; detailRow.comment = this.gradeForm.comment }
+              this.gradeDialog.visible = false
+              ElementPlus.ElMessage.success('批改成功')
+            } else {
+              ElementPlus.ElMessage.error(json.message || '批改失败')
+            }
+          } catch (e) {
+            ElementPlus.ElMessage.error('网络错误')
+          }
+        },
+        resetPubForm() {
+          this.pubForm = { title:'', description:'', classId:null, courseId:null, deadline:'', maxScore:100 }
+          this.$nextTick(() => { if (this.$refs.pubFormRef) this.$refs.pubFormRef.clearValidate() })
+        }
+      }
+    }
+
+    // ---------- 路由 ----------
+
+    const routes = [
+      { path: '/',             redirect: '/dashboard' },
+      { path: '/dashboard',   component: Dashboard,       name: '仪表盘' },
+      { path: '/student',     component: StudentManage,   name: '学生管理' },
+      { path: '/class',       component: ClassManage,     name: '班级管理' },
+      { path: '/course',      component: CourseManage,    name: '课程管理' },
+      { path: '/schedule',    component: ScheduleManage,  name: '排课管理' },
+      { path: '/attendance',  component: AttendanceManage,name: '考勤打卡' },
+      { path: '/score',       component: ScoreManage,     name: '成绩管理' },
+      { path: '/homework',    component: HomeworkManage,  name: '作业管理' },
+    ]
+
+    const router = createRouter({
+      history: createWebHashHistory(),
+      routes
+    })
+
+    // 路由守卫：未登录跳回 login.html
+    router.beforeEach((to, from, next) => {
+      const token = localStorage.getItem('token')
+      if (!token) {
+        window.location.href = 'login.html'
+        return
+      }
+      next()
+    })
+
+    // ---------- 根组件 ----------
+
+    const API_BASE = 'http://localhost:8080'
+
+    const app = createApp({
+      setup() {
+        const collapsed = ref(false)
+        const currentRoute = computed(() => router.currentRoute.value.path)
+
+        // 先从 localStorage 读取缓存的用户信息（用于页面快速展示）
+        const raw = localStorage.getItem('userInfo')
+        const userInfo = reactive(raw ? JSON.parse(raw) : { realName: '', username: '' })
+
+        // 调用 /api/user/info 验证 token 有效性并获取最新用户信息
+        const fetchUserInfo = async () => {
+          const token = localStorage.getItem('token')
+          if (!token) {
+            window.location.href = 'login.html'
+            return
+          }
+          try {
+            const response = await fetch(API_BASE + '/api/user/info', {
+              headers: { 'token': token }
+            })
+            const result = await response.json()
+            if (result.code === 200) {
+              Object.assign(userInfo, result.data)
+              localStorage.setItem('userInfo', JSON.stringify(result.data))
+            } else {
+              localStorage.removeItem('token')
+              localStorage.removeItem('userInfo')
+              window.location.href = 'login.html'
+            }
+          } catch (e) {
+            // 网络异常时，如果有本地缓存则继续使用
+            if (!localStorage.getItem('userInfo')) {
+              window.location.href = 'login.html'
+            }
+          }
+        }
+
+        fetchUserInfo()
+
+        const handleLogout = async () => {
+          const token = localStorage.getItem('token')
+          try {
+            await fetch(API_BASE + '/api/logout', {
+              method: 'POST',
+              headers: { 'token': token }
+            })
+          } catch (e) {
+            // 即使接口调用失败也清除本地状态
+          }
+          localStorage.removeItem('token')
+          localStorage.removeItem('userInfo')
+          ElementPlus.ElMessage.success('已退出登录')
+          window.location.href = 'login.html'
+        }
+
+        return { collapsed, currentRoute, userInfo, handleLogout }
+      }
+    })
+
+    app.use(router)
+    app.use(ElementPlus, { locale: ElementPlusLocaleZhCn })
+    app.mount('#app')
+  </script>
+</body>
+</html>

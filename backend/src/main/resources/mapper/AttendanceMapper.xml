@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.mumululu.mapper.AttendanceMapper">
+
+    <select id="findStudentsWithStatus" resultType="map">
+        SELECT s.id AS studentId, s.student_no AS studentNo, s.name AS studentName,
+               a.id AS attendanceId, a.status
+        FROM student s
+        LEFT JOIN attendance a ON s.id = a.student_id
+            AND a.attendance_date = #{attendanceDate} AND a.is_deleted = 0
+        WHERE s.class_id = #{classId} AND s.is_deleted = 0
+        ORDER BY s.student_no
+    </select>
+
+    <insert id="batchInsertOrUpdate">
+        INSERT INTO attendance (student_id, class_id, attendance_date, status)
+        VALUES
+        <foreach collection="records" item="r" separator=",">
+            (#{r.studentId}, #{classId}, #{attendanceDate}, #{r.status})
+        </foreach>
+        ON DUPLICATE KEY UPDATE status = VALUES(status)
+    </insert>
+
+    <update id="updateStatus">
+        UPDATE attendance SET status = #{status} WHERE id = #{id} AND is_deleted = 0
+    </update>
+
+    <select id="list" resultType="com.mumululu.entity.Attendance">
+        SELECT a.id, a.student_id, a.class_id, a.attendance_date, a.status, a.create_time,
+               s.student_no, s.name AS student_name,
+               c.class_name
+        FROM attendance a
+        LEFT JOIN student s ON a.student_id = s.id
+        LEFT JOIN class c ON a.class_id = c.id AND c.is_deleted = 0
+        WHERE a.class_id = #{classId} AND a.is_deleted = 0
+        <if test="startDate != null and startDate != ''">
+            AND a.attendance_date &gt;= #{startDate}
+        </if>
+        <if test="endDate != null and endDate != ''">
+            AND a.attendance_date &lt;= #{endDate}
+        </if>
+        ORDER BY a.attendance_date DESC, s.student_no
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="count" resultType="long">
+        SELECT COUNT(*) FROM attendance a
+        WHERE a.class_id = #{classId} AND a.is_deleted = 0
+        <if test="startDate != null and startDate != ''">
+            AND a.attendance_date &gt;= #{startDate}
+        </if>
+        <if test="endDate != null and endDate != ''">
+            AND a.attendance_date &lt;= #{endDate}
+        </if>
+    </select>
+
+</mapper>

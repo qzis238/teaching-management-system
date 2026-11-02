@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.mumululu.mapper.DashboardMapper">
+
+    <select id="countStudents" resultType="long">
+        SELECT COUNT(*) FROM student WHERE is_deleted = 0
+    </select>
+
+    <select id="countClasses" resultType="long">
+        SELECT COUNT(*) FROM class WHERE is_deleted = 0
+    </select>
+
+    <select id="countTodayAttendancePresent" resultType="long">
+        SELECT COUNT(*) FROM attendance
+        WHERE attendance_date = CURDATE() AND status = 1 AND is_deleted = 0
+    </select>
+
+    <select id="countTodayAttendanceTotal" resultType="long">
+        SELECT COUNT(*) FROM attendance
+        WHERE attendance_date = CURDATE() AND is_deleted = 0
+    </select>
+
+    <select id="countPendingHomework" resultType="long">
+        SELECT COUNT(*) FROM homework_submission hs
+        INNER JOIN homework h ON hs.homework_id = h.id AND h.is_deleted = 0
+        WHERE hs.submit_status IN (1, 2) AND hs.score IS NULL AND hs.is_deleted = 0
+    </select>
+
+    <select id="classStudentDistribution" resultType="map">
+        SELECT c.class_name AS className, COUNT(s.id) AS studentCount
+        FROM class c
+        LEFT JOIN student s ON c.id = s.class_id AND s.is_deleted = 0
+        WHERE c.is_deleted = 0
+        GROUP BY c.id, c.class_name
+        ORDER BY c.id
+    </select>
+
+    <select id="attendanceTrend" resultType="map">
+        WITH RECURSIVE dates AS (
+            SELECT CURDATE() - INTERVAL 6 DAY AS dt
+            UNION ALL
+            SELECT dt + INTERVAL 1 DAY FROM dates WHERE dt &lt; CURDATE()
+        )
+        SELECT DATE_FORMAT(d.dt, '%Y-%m-%d') AS `date`,
+               ROUND(IFNULL(SUM(CASE WHEN a.status = 1 THEN 1 ELSE 0 END) * 100.0
+                       / NULLIF(COUNT(a.id), 0), 0), 1) AS rate
+        FROM dates d
+        LEFT JOIN attendance a ON a.attendance_date = d.dt AND a.is_deleted = 0
+        GROUP BY d.dt
+        ORDER BY d.dt
+    </select>
+
+</mapper>

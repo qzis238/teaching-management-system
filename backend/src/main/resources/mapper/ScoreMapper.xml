@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.mumululu.mapper.ScoreMapper">
+
+    <select id="list" resultType="com.mumululu.entity.Score">
+        SELECT sc.id, sc.student_id, sc.course_id, sc.exam_type, sc.score, sc.exam_date,
+               sc.create_time, s.student_no, s.name AS student_name, c.course_name
+        FROM score sc
+        LEFT JOIN student s ON sc.student_id = s.id
+        LEFT JOIN course c ON sc.course_id = c.id AND c.is_deleted = 0
+        WHERE sc.is_deleted = 0
+          AND sc.course_id = #{courseId}
+          AND s.class_id = #{classId}
+        <if test="examType != null and examType != ''">
+            AND sc.exam_type = #{examType}
+        </if>
+        ORDER BY s.student_no
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="count" resultType="long">
+        SELECT COUNT(*) FROM score sc
+        LEFT JOIN student s ON sc.student_id = s.id
+        WHERE sc.is_deleted = 0
+          AND sc.course_id = #{courseId}
+          AND s.class_id = #{classId}
+        <if test="examType != null and examType != ''">
+            AND sc.exam_type = #{examType}
+        </if>
+    </select>
+
+    <insert id="batchInsertOrUpdate">
+        INSERT INTO score (student_id, course_id, exam_type, score, exam_date)
+        VALUES
+        <foreach collection="records" item="r" separator=",">
+            (#{r.studentId}, #{courseId}, #{examType}, #{r.score}, #{examDate})
+        </foreach>
+        ON DUPLICATE KEY UPDATE score = VALUES(score), exam_date = VALUES(exam_date)
+    </insert>
+
+    <update id="updateScore">
+        UPDATE score SET score = #{score} WHERE id = #{id} AND is_deleted = 0
+    </update>
+
+    <update id="deleteById">
+        UPDATE score SET is_deleted = 1 WHERE id = #{id} AND is_deleted = 0
+    </update>
+
+    <select id="findById" resultType="com.mumululu.entity.Score">
+        SELECT id, student_id, course_id, exam_type, score, exam_date
+        FROM score
+        WHERE id = #{id} AND is_deleted = 0
+    </select>
+
+    <select id="findByStudentId" resultType="com.mumululu.entity.Score">
+        SELECT sc.id, sc.course_id, sc.exam_type, sc.score, sc.exam_date,
+               c.course_name
+        FROM score sc
+        LEFT JOIN course c ON sc.course_id = c.id AND c.is_deleted = 0
+        WHERE sc.student_id = #{studentId} AND sc.is_deleted = 0
+        ORDER BY sc.exam_date DESC
+    </select>
+
+</mapper>
